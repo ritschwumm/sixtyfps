@@ -148,6 +148,143 @@ impl PathShader {
 }
 
 #[derive(Clone)]
+pub(crate) struct RectShader {
+    inner: Rc<Shader>,
+    matrix_location: <GLContext as HasContext>::UniformLocation,
+    vertcolor_location: <GLContext as HasContext>::UniformLocation,
+    pos_location: u32,
+    rect_size_location: <GLContext as HasContext>::UniformLocation,
+    radius_location: <GLContext as HasContext>::UniformLocation,
+    border_width_location: <GLContext as HasContext>::UniformLocation,
+    border_color_location: <GLContext as HasContext>::UniformLocation,
+}
+
+impl RectShader {
+    pub fn new(gl: &Rc<glow::Context>) -> Self {
+        const RECT_VERTEX_SHADER: &str = r#"#version 100
+        attribute vec2 pos;
+        uniform vec4 vertcolor;
+        uniform mat4 matrix;
+        varying lowp vec4 fragcolor;
+        varying lowp vec2 fragpos;
+
+        void main() {
+            gl_Position = matrix * vec4(pos, 0.0, 1);
+            fragcolor = vertcolor;
+            fragpos = pos;
+        }"#;
+
+        const RECT_FRAGMENT_SHADER: &str = r#"#version 100
+        precision mediump float;
+        uniform vec2 rectsize;
+        uniform float radius;
+        uniform float border_width;
+        uniform lowp vec4 border_color;
+        varying lowp vec4 fragcolor;
+        varying lowp vec2 fragpos;
+
+        float roundRectDistance(vec2 pos, vec2 rect_size, float radius) 
+        {            
+            vec2 q = abs(pos) - rect_size + radius;
+            return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - radius;
+        }      
+
+        void main() {
+            float sd = roundRectDistance(fragpos - rectsize, rectsize, radius);
+            float border_distance = 0.0;
+            if (border_width > 0.) {
+                border_distance = abs(sd) - border_width;
+                border_distance = clamp(border_distance, 0.0, 1.0);
+            }
+            float dist = clamp(sd, 0.0, 1.0);                       
+            vec4 fill_color = mix(fragcolor, vec4(0., 0., 0., 0.), dist);
+            vec4 stroke_color = mix(border_color, vec4(0., 0., 0., 0.), border_distance);
+            if (border_distance < 2.0 / border_width) {
+                gl_FragColor = stroke_color;
+            } else {
+                gl_FragColor = fill_color;
+            }
+        }"#;
+
+        let inner = Rc::new(Shader::new(&gl, RECT_VERTEX_SHADER, RECT_FRAGMENT_SHADER));
+
+        let matrix_location = unsafe { gl.get_uniform_location(inner.program, "matrix").unwrap() };
+        let vertcolor_location =
+            unsafe { gl.get_uniform_location(inner.program, "vertcolor").unwrap() };
+        let rect_size_location =
+            unsafe { gl.get_uniform_location(inner.program, "rectsize").unwrap() };
+        let radius_location = unsafe { gl.get_uniform_location(inner.program, "radius").unwrap() };
+        let border_width_location =
+            unsafe { gl.get_uniform_location(inner.program, "border_width").unwrap() };
+        let border_color_location =
+            unsafe { gl.get_uniform_location(inner.program, "border_color").unwrap() };
+
+        let pos_location = unsafe { gl.get_attrib_location(inner.program, "pos").unwrap() };
+
+        Self {
+            inner,
+            matrix_location,
+            vertcolor_location,
+            pos_location,
+            rect_size_location,
+            radius_location,
+            border_width_location,
+            border_color_location,
+        }
+    }
+
+    pub fn bind(
+        &self,
+        gl: &glow::Context,
+        matrix: &[f32; 16],
+        vertcolor: &[f32; 4],
+        rect_size: &[f32; 2],
+        radius: f32,
+        border_width: f32,
+        border_color: &[f32; 4],
+        pos: &GLArrayBuffer<Vertex>,
+        indices: &GLIndexBuffer<u16>,
+    ) {
+        self.inner.use_program(&gl);
+
+        unsafe {
+            gl.uniform_matrix_4_f32_slice(Some(&self.matrix_location), false, matrix);
+
+            gl.uniform_4_f32(
+                Some(&self.vertcolor_location),
+                vertcolor[0],
+                vertcolor[1],
+                vertcolor[2],
+                vertcolor[3],
+            );
+
+            gl.uniform_2_f32(Some(&self.rect_size_location), rect_size[0], rect_size[1]);
+
+            gl.uniform_1_f32(Some(&self.radius_location), radius);
+
+            gl.uniform_1_f32(Some(&self.border_width_location), border_width);
+            gl.uniform_4_f32(
+                Some(&self.border_color_location),
+                border_color[0],
+                border_color[1],
+                border_color[2],
+                border_color[3],
+            );
+        };
+
+        pos.bind(&gl, self.pos_location);
+
+        indices.bind(&gl);
+    }
+
+    pub fn unbind(&self, gl: &glow::Context) {
+        unsafe {
+            gl.disable_vertex_attrib_array(self.pos_location);
+        }
+    }
+}
+
+#[derive(Clone)]
 pub(crate) struct ImageShader {
     inner: Rc<Shader>,
     matrix_location: <GLContext as HasContext>::UniformLocation,
