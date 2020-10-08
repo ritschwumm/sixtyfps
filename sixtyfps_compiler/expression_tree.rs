@@ -50,6 +50,7 @@ pub enum BuiltinFunction {
     GetWindowScaleFactor,
     Debug,
     SetFocusItem,
+    NativePadding,
 }
 
 impl BuiltinFunction {
@@ -63,6 +64,12 @@ impl BuiltinFunction {
             }
             BuiltinFunction::SetFocusItem => Type::Function {
                 return_type: Box::new(Type::Void),
+                args: vec![Type::ElementReference],
+            },
+            BuiltinFunction::NativePadding => Type::Function {
+                return_type: Box::new(
+                    crate::typeregister::NATIVE_PADDINGS_TYPE.with(|t| t.clone()),
+                ),
                 args: vec![Type::ElementReference],
             },
         }
@@ -365,7 +372,13 @@ impl Expression {
             },
             Expression::Cast { to, .. } => to.clone(),
             Expression::CodeBlock(sub) => sub.last().map_or(Type::Void, |e| e.ty()),
-            Expression::FunctionCall { function, .. } => function.ty(),
+            Expression::FunctionCall { function, .. } => {
+                let function_ty = function.ty();
+                match function_ty {
+                    Type::Function { return_type, .. } => return_type.as_ref().clone(),
+                    _ => function_ty,
+                }
+            }
             Expression::SelfAssignment { .. } => Type::Void,
             Expression::ResourceReference { .. } => Type::Resource,
             Expression::Condition { condition: _, true_expr, false_expr } => {

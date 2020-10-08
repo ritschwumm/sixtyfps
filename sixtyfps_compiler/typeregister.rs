@@ -504,6 +504,26 @@ pub struct TypeRegister {
     parent_registry: Option<Rc<RefCell<TypeRegister>>>,
 }
 
+thread_local! {
+    pub static NATIVE_PADDINGS_TYPE: Type = Type::Component(Rc::new(Component {
+        id: "sixtyfps::re_exports::NativePaddings".into(),
+        root_element: Rc::new(RefCell::new(Element {
+            base_type: Type::Void,
+            property_declarations: [
+                ("left".to_owned(), Type::Length.into()),
+                ("right".to_owned(), Type::Length.into()),
+                ("top".to_owned(), Type::Length.into()),
+                ("bottom".to_owned(), Type::Length.into()),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            ..Element::default()
+        })),
+        ..Component::default()
+    }));
+}
+
 impl TypeRegister {
     pub fn builtin() -> Rc<RefCell<Self>> {
         let mut r = TypeRegister::default();
@@ -824,6 +844,8 @@ impl TypeRegister {
         }));
         r.types.insert("StandardListViewItem".into(), standard_listview_item.clone());
 
+        r.types.insert("NativePaddings".into(), NATIVE_PADDINGS_TYPE.with(|t| t.clone()));
+
         // FIXME: should this be auto generated or placed somewhere else
         native_class(
             &mut r,
@@ -879,7 +901,7 @@ impl TypeRegister {
             ],
             &[],
         );
-        native_class(
+        native_class_with_member_functions(
             &mut r,
             "NativeGroupBox",
             &[
@@ -894,6 +916,11 @@ impl TypeRegister {
                 ("native_padding_bottom", Type::Length),
             ],
             &[],
+            &[(
+                "native_padding",
+                BuiltinFunction::NativePadding.ty(),
+                Expression::BuiltinFunctionReference(BuiltinFunction::NativePadding),
+            )],
         );
         native_class(
             &mut r,

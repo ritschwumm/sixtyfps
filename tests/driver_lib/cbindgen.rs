@@ -228,6 +228,7 @@ fn gen_backend_qt(include_dir: &Path) -> anyhow::Result<()> {
         "NativeGroupBox",
         "NativeLineEdit",
         "NativeScrollBar",
+        "sixtyfps_qt_style_groupbox_native_padding",
     ]
     .iter()
     .map(|x| x.to_string())

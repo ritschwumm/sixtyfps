@@ -973,7 +973,8 @@ fn compile_expression(e: &Expression, component: &Rc<Component>) -> TokenStream 
                 quote!(#window_ref.scale_factor)
             }
             BuiltinFunction::Debug => quote!((|x| println!("{:?}", x))),
-            BuiltinFunction::SetFocusItem => panic!("internal error: SetFocusItem is handled directly in CallFunction")
+            BuiltinFunction::SetFocusItem => panic!("internal error: SetFocusItem is handled directly in CallFunction"),
+            BuiltinFunction::NativePadding => panic!("internal error: NativePadding is handled directly in CallFunction")
         },
         Expression::ElementReference(_) => todo!("Element references are only supported in the context of built-in function calls at the moment"),
         Expression::MemberFunction{ .. } => panic!("member function expressions must not appear in the code generator anymore"),
@@ -1038,6 +1039,22 @@ fn compile_expression(e: &Expression, component: &Rc<Component>) -> TokenStream 
                         let window_ref = window_ref_expression(component);
                         quote!(
                             #window_ref.set_focus_item(VRef::new_pin(self_pinned.as_ref()), VRef::new_pin(Self::FIELD_OFFSETS.#item.apply_pin(self_pinned.as_ref())));
+                        )
+                    } else {
+                        panic!("internal error: argument to SetFocusItem must be an element")
+                    }
+                },
+                Expression::BuiltinFunctionReference(BuiltinFunction::NativePadding) => {
+                    if arguments.len() != 1{
+                        panic!("internal error: incorrect argument count to NativePadding call");
+                    }
+                    if let Expression::ElementReference(item) = &arguments[0] {
+                        let item = format_ident!("{}", item.upgrade().unwrap().borrow().id);
+                        let window_ref = window_ref_expression(component);
+                        quote!(
+                            sixtyfps::re_exports::VRef::downcast_pin::<sixtyfps::re_exports::NativeGroupBox>(VRef::new_pin(Self::FIELD_OFFSETS.#item.apply_pin(self_pinned.as_ref())))
+            .unwrap()
+            .native_padding(&#window_ref)
                         )
                     } else {
                         panic!("internal error: argument to SetFocusItem must be an element")

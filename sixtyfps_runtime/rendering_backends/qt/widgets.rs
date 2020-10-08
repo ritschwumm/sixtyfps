@@ -702,6 +702,21 @@ impl ItemConsts for NativeSlider {
 
 ItemVTable_static! { #[no_mangle] pub static NativeSliderVTable for NativeSlider }
 
+/// The implementation of the `PropertyAnimation` element
+#[repr(C)]
+#[derive(FieldOffsets, Default, BuiltinItem, Clone, Debug)]
+#[pin]
+pub struct NativePaddings {
+    #[rtti_field]
+    pub left: f32,
+    #[rtti_field]
+    pub right: f32,
+    #[rtti_field]
+    pub top: f32,
+    #[rtti_field]
+    pub bottom: f32,
+}
+
 #[repr(C)]
 #[derive(FieldOffsets, Default, BuiltinItem)]
 #[pin]
@@ -712,10 +727,6 @@ pub struct NativeGroupBox {
     pub height: Property<f32>,
     pub title: Property<SharedString>,
     pub cached_rendering_data: CachedRenderingData,
-    pub native_padding_left: Property<f32>,
-    pub native_padding_right: Property<f32>,
-    pub native_padding_top: Property<f32>,
-    pub native_padding_bottom: Property<f32>,
 }
 
 impl Item for NativeGroupBox {
@@ -768,48 +779,10 @@ impl Item for NativeGroupBox {
     }
 
     fn layouting_info(self: Pin<&Self>, window: &ComponentWindow) -> LayoutInfo {
-        let text: qttypes::QString =
-            Self::FIELD_OFFSETS.title.apply_pin(self).get().as_str().into();
-        let dpr = window.scale_factor();
-
-        let paddings = cpp!(unsafe [
-            text as "QString",
-            dpr as "float"
-        ] -> qttypes::QMargins as "QMargins" {
-            ensure_initialized();
-            QStyleOptionGroupBox option;
-            option.text = text;
-            option.lineWidth = 1;
-            option.midLineWidth = 0;
-            option.subControls = QStyle::SC_GroupBoxFrame;
-            if (!text.isEmpty()) {
-                option.subControls |= QStyle::SC_GroupBoxLabel;
-            }
-             // Just some size big enough to be sure that the frame fitst in it
-            option.rect = QRect(0, 0, 10000, 10000);
-            option.textColor = QColor(qApp->style()->styleHint(
-                QStyle::SH_GroupBox_TextLabelColor, &option));
-            QRect contentsRect = qApp->style()->subControlRect(
-                QStyle::CC_GroupBox, &option, QStyle::SC_GroupBoxContents);
-            //QRect elementRect = qApp->style()->subElementRect(
-            //    QStyle::SE_GroupBoxLayoutItem, &option);
-
-            auto hs = qApp->style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing, &option);
-            auto vs = qApp->style()->pixelMetric(QStyle::PM_LayoutVerticalSpacing, &option);
-
-            return {
-                qRound((contentsRect.left() + hs) * dpr),
-                qRound((contentsRect.top() + vs) * dpr),
-                qRound((option.rect.right() - contentsRect.right() + hs) * dpr),
-                qRound((option.rect.bottom() - contentsRect.bottom() + vs) * dpr) };
-        });
-        self.native_padding_left.set(paddings.left as _);
-        self.native_padding_right.set(paddings.right as _);
-        self.native_padding_top.set(paddings.top as _);
-        self.native_padding_bottom.set(paddings.bottom as _);
+        let padding = self.native_padding(window);
         LayoutInfo {
-            min_width: (paddings.left + paddings.right) as _,
-            min_height: (paddings.top + paddings.bottom) as _,
+            min_width: padding.left + padding.right,
+            min_height: padding.top + padding.bottom,
             ..LayoutInfo::default()
         }
     }
@@ -828,6 +801,52 @@ impl Item for NativeGroupBox {
     }
 
     fn focus_event(self: Pin<&Self>, _: &FocusEvent, _window: &ComponentWindow) {}
+}
+
+impl NativeGroupBox {
+    pub fn native_padding(self: Pin<&Self>, window: &ComponentWindow) -> NativePaddings {
+        let text: qttypes::QString =
+            Self::FIELD_OFFSETS.title.apply_pin(self).get().as_str().into();
+        let dpr = window.scale_factor();
+
+        let paddings = cpp!(unsafe [
+            text as "QString",
+            dpr as "float"
+        ] -> qttypes::QMargins as "QMargins" {
+            ensure_initialized();
+            QStyleOptionGroupBox option;
+            option.text = text;
+            option.lineWidth = 1;
+            option.midLineWidth = 0;
+            option.subControls = QStyle::SC_GroupBoxFrame;
+            if (!text.isEmpty()) {
+                option.subControls |= QStyle::SC_GroupBoxLabel;
+            }
+            // Just some size big enough to be sure that the frame fitst in it
+            option.rect = QRect(0, 0, 10000, 10000);
+            option.textColor = QColor(qApp->style()->styleHint(
+                QStyle::SH_GroupBox_TextLabelColor, &option));
+            QRect contentsRect = qApp->style()->subControlRect(
+                QStyle::CC_GroupBox, &option, QStyle::SC_GroupBoxContents);
+            //QRect elementRect = qApp->style()->subElementRect(
+            //    QStyle::SE_GroupBoxLayoutItem, &option);
+
+            auto hs = qApp->style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing, &option);
+            auto vs = qApp->style()->pixelMetric(QStyle::PM_LayoutVerticalSpacing, &option);
+
+            return {
+                qRound((contentsRect.left() + hs) * dpr),
+                qRound((contentsRect.top() + vs) * dpr),
+                qRound((option.rect.right() - contentsRect.right() + hs) * dpr),
+                qRound((option.rect.bottom() - contentsRect.bottom() + vs) * dpr) };
+        });
+        NativePaddings {
+            left: paddings.left as _,
+            right: paddings.right as _,
+            top: paddings.top as _,
+            bottom: paddings.bottom as _,
+        }
+    }
 }
 
 impl ItemConsts for NativeGroupBox {
@@ -1298,3 +1317,17 @@ impl ItemConsts for NativeStandardListViewItem {
 }
 
 ItemVTable_static! { #[no_mangle] pub static NativeStandardListViewItemVTable for NativeStandardListViewItem }
+
+pub(crate) mod ffi {
+    use super::*;
+
+    #[no_mangle]
+    pub extern "C" fn sixtyfps_qt_style_groupbox_native_padding(
+        item: core::pin::Pin<vtable::VRef<sixtyfps_corelib::items::ItemVTable>>,
+        window: &sixtyfps_corelib::eventloop::ComponentWindow,
+    ) -> NativePaddings {
+        sixtyfps_corelib::items::ItemRef::downcast_pin::<NativeGroupBox>(item)
+            .unwrap()
+            .native_padding(window)
+    }
+}

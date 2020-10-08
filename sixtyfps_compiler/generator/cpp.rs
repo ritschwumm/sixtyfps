@@ -1131,6 +1131,9 @@ fn compile_expression(e: &crate::expression_tree::Expression, component: &Rc<Com
             BuiltinFunction::SetFocusItem => {
                 format!("{}.set_focus_item", window_ref_expression(component))
             }
+            BuiltinFunction::NativePadding => {
+                panic!("internal error: NativePadding call handled by CallFunction")
+            }
         },
         Expression::ElementReference(_) => todo!("Element references are only supported in the context of built-in function calls at the moment"),
         Expression::MemberFunction { .. } => panic!("member function expressions must not appear in the code generator anymore"),
@@ -1222,6 +1225,24 @@ fn compile_expression(e: &crate::expression_tree::Expression, component: &Rc<Com
                         item = focus_item.id
                     );
                     format!("{}.set_focus_item({}, {});", window_ref, component, item)
+                } else {
+                    panic!("internal error: argument to SetFocusItem must be an element")
+                }
+            }
+            Expression::BuiltinFunctionReference(BuiltinFunction::NativePadding) => {
+                if arguments.len() != 1 {
+                    panic!("internal error: incorrect argument count to NativePadding call");
+                }
+                if let Expression::ElementReference(item) = &arguments[0] {
+                    let window_ref = window_ref_expression(component);
+                    let item = item.upgrade().unwrap();
+                    let item = item.borrow();
+                    let item = format!(
+                        "{{&sixtyfps::private_api::{vt}, &{item}}}",
+                        vt = item.base_type.as_native().vtable_symbol,
+                        item = item.id
+                    );
+                    format!("sixtyfps_qt_style_groupbox_native_padding({}, {});", item, window_ref)
                 } else {
                     panic!("internal error: argument to SetFocusItem must be an element")
                 }

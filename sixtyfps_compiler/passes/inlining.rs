@@ -178,6 +178,8 @@ fn fixup_element_references(
         {
             *element = Rc::downgrade(new_element);
         }
+    } else {
+        expr.visit_mut(|expr| fixup_element_references(expr, mapping))
     }
 }
 
