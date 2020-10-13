@@ -381,7 +381,7 @@ Example := Rectangle {
 }
 ```
 
-This will aniate the color property for 100ms when it changes.
+This will animate the color property for 100ms when it changes.
 
 Animation can be configured with the following parameter:
  * `duration`: the amount of time it takes for the animation to complete
